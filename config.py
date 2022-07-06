@@ -73,21 +73,3 @@ def get_config():
     config.base_dir = path.join(base_data_path, config.scene)
 
     return config
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
