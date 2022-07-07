@@ -221,7 +221,8 @@ class MipDataset(Dataset):
                 # camera_angle_x 为相机的水平视场
                 self.focal = .5 * self.w / np.tan(.5 * camera_angle_x) # 固定的计算相机焦距的方法
                 self.n_poses = self.images.shape[0] # batch_size
-            
+        
+        
 
 
 
