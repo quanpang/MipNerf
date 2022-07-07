@@ -2,16 +2,18 @@
 generate the dataset:
 dataset数据准备文件
 '''
-from collections import namedtuple
-from email.mime import base
-from math import radians
+
 import os 
 import cv2
 import json
 import torch
 import numpy as np
 from utils import *
+from os import path
 from PIL import Image
+from math import radians
+from email.mime import base
+from collections import namedtuple
 from torch.utils.data import Dataset,DataLoader
 
 
@@ -164,6 +166,75 @@ class MipDataset(Dataset):
             if self.images is not None:
                 self.images = torch.from_numpy(self.images.reshape([-1, 3]))
         
+        def ray_to_device(self,rays):
+            return namedtuple_map(lambda r: r.to(self.device), rays)
+
+        def __getitem__(self,i):
+            ray = namedtuple_map(lambda r: r[i], self.rays)
+            if self.split == "render":
+                return ray
+            else:
+                pixel = self.images[i]
+                return self.ray_to_device(ray), pixel
+        
+        def __len__(self):
+            if self.split == "render":
+                return self.rays[0].shape[0]
+            else:
+                return len(self.images)
+        
+        class Blender(MipDataset):
+            '''
+            Blender Dataset
+            '''
+            def __init__(self, base_dir, split, factor=1, spherify=False, white_bkgd=True, near=2, far=6, radius=4, radii=1, h=800, w=800, device=torch.device("cpu")):
+                super(Blender, self).__init__(base_dir, split, factor=factor, spherify=spherify, near=near, far=far, white_bkgd=white_bkgd, radius=radius, radii=radii, h=h, w=w, device=device)
+            
+            def generate_training_poses(self):
+                """Load data from disk"""
+                split_dir = self.split
+                with open(path.join(self.base_dir, 'transforms_{}.json'.format(split_dir)), 'r') as fp:
+                    meta = json.load(fp)
+                images = []
+                cams = []
+                for i in range(len(meta['frames'])):
+                    frame = meta['frames'][i]
+                    fname = os.path.join(self.base_dir, frame['file_path'] + '.png')
+                    with open(fname, 'rb') as imgin:
+                        image = np.array(Image.open(imgin), dtype=np.float32) / 255.
+                        if self.factor >= 2:
+                            [halfres_h, halfres_w] = [hw // 2 for hw in image.shape[:2]]
+                            image = cv2.resize(
+                                image, (halfres_w, halfres_h), interpolation=cv2.INTER_AREA) # 局部像素重采样方法
+                    cams.append(np.array(frame['transform_matrix'], dtype=np.float32))
+                    images.append(image)
+                self.images = np.stack(np.array(images), axis=0)
+                if self.white_background:
+                    self.images = (
+                        self.images[..., :3] * self.images[..., -1:] +
+                        (1. - self.images[..., -1:]))
+                else:
+                    self.images = self.images[..., :3]
+                self.h, self.w = self.images.shape[1:3] #(batch_size,h,w,3)
+                self.cam_to_world = np.stack(cams, axis=0)
+                camera_angle_x = float(meta['camera_angle_x'])
+                # camera_angle_x 为相机的水平视场
+                self.focal = .5 * self.w / np.tan(.5 * camera_angle_x) # 固定的计算相机焦距的方法
+                self.n_poses = self.images.shape[0] # batch_size
+            
+
+
+
+
+
+
+
+
+
+
+
+            
+
 
 
 
